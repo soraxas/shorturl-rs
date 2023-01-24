@@ -1,15 +1,13 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::slice::SliceIndex;
 
 use rusqlite::{params, types::ToSqlOutput, Connection, Result};
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use log::{error, info, warn};
+use log::error;
 
-use crate::types::{AccessLog, Meta, MetaType, Url};
+use crate::types::{AccessLog, Meta, MetaType};
 
 pub struct Store {
     conn: Connection,
@@ -207,7 +205,7 @@ impl Store {
         }
     }
 
-    pub fn remove(&mut self, short_code: &str) -> Result<(i32)> {
+    pub fn remove(&mut self, short_code: &str) -> Result<i32> {
         self.conn
             .execute(
                 "DELETE FROM

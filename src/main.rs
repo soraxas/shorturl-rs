@@ -3,7 +3,6 @@ mod db_store;
 mod types;
 
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -12,10 +11,8 @@ use warp::{http, Filter, Rejection};
 use db_store::Store;
 use futures::future;
 use serde_json;
-use types::{Meta, ShortUrlMapping, Url};
+use types::{Meta, ShortUrlMapping};
 use warp::reject::MethodNotAllowed;
-
-type Empty = ();
 
 fn convert_header_to_json(
     headers: &http::HeaderMap<http::HeaderValue>,
@@ -33,7 +30,7 @@ fn convert_header_to_json(
 fn convert_json_to_string(json: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
     match serde_json::to_string(&json) {
         Ok(val) => Some(val),
-        Err(e) => None,
+        Err(_) => None,
     }
 }
 
@@ -74,7 +71,6 @@ async fn add_shorturl(
 
 async fn delete_shorturl(
     short_code: String,
-    // _: Empty,
     store: Arc<Mutex<Store>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     // store.grocery_list.write().remove(&id.name);
@@ -178,12 +174,6 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, std::conve
             http::StatusCode::INTERNAL_SERVER_ERROR,
         ))
     }
-}
-
-fn delete_json() -> impl Filter<Extract = (Empty,), Error = warp::Rejection> + Clone {
-    // When accepting a body, we want a JSON body
-    // (and to reject huge payloads)...
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }
 
 fn post_json() -> impl Filter<Extract = (ShortUrlMapping,), Error = warp::Rejection> + Clone {
