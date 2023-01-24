@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 
 use log::error;
 
-use crate::types::{AccessLog, Meta, MetaType};
+use crate::types::{AccessLog, Meta, MetaType, ShortUrlMapping};
 
 pub struct Store {
     conn: Connection,
@@ -143,6 +143,30 @@ impl Store {
         Store::accessed(&self.conn, short_code, meta, &MetaType::Access, succeed);
 
         return result;
+    }
+
+    pub fn get_all(&mut self) -> Result<Vec<ShortUrlMapping>> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT
+                    short_code, long_url
+                FROM
+                    short_urls
+                    ",
+            )
+            .unwrap();
+
+        Ok(stmt
+            .query_map((), |row| {
+                Ok(ShortUrlMapping {
+                    short_code: row.get(0).unwrap(),
+                    url: row.get(1).unwrap(),
+                })
+            })
+            .unwrap()
+            .map(|x| x.unwrap())
+            .collect())
     }
 
     pub fn get_summarised_access_logs(&mut self) -> Result<Vec<AccessLog>> {

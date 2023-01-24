@@ -20,11 +20,27 @@
         table {
             width: 100%;
         }
+
+        .alertbox {
+            margin: auto;
+            width: 50%;
+            border: 3px solid red;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <div id="apikey-alert" class="alertbox" style="display: none">
+        API Key is not set. This website would not function correctly.
+        <br>
+        <br>
+        Please set api key with url query parameters "apikey", i.e.,
+        <br>
+        <br>
+        <div id="baseurl" style="display: inline"></div>?apikey=XXXXXXXXXXXXXX
+    </div>
     <form class="pure-form pure-form-aligned" name="new-url-form">
         <fieldset>
             <legend>Add new URL</legend>
@@ -58,6 +74,11 @@
         </tbody>
     </table>
 </div>
-
+<script>
+  if (!apikey) {
+    document.getElementById("baseurl").innerHTML = window.location.origin;
+    document.getElementById("apikey-alert").style.display = "block";
+  }
+</script>
 </body>
 </html>

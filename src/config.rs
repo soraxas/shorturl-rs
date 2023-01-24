@@ -7,6 +7,10 @@ pub const LOCALHOST: [u8; 4] = [127, 0, 0, 1];
 pub const PORT_SERVICE: u16 = 8080;
 pub const PORT_API: u16 = 8081;
 
+pub fn ip_to_string(ip: [u8; 4]) -> String {
+    format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3])
+}
+
 pub struct Config {
     pub redirect_http_type: StatusCode,
     pub address_to_rederect_if_not_found: Option<String>,

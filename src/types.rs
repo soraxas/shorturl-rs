@@ -4,8 +4,13 @@ pub type Url = String;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ShortUrlMapping {
-    // pub id: ShortCode,
-    pub url: Url,
+    pub short_code: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AddUrlMapping {
+    pub url: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

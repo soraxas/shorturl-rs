@@ -11,7 +11,7 @@ use warp::{http, Filter, Rejection};
 use db_store::Store;
 use futures::future;
 use serde_json;
-use types::{Meta, ShortUrlMapping};
+use types::{AddUrlMapping, Meta};
 use warp::reject::MethodNotAllowed;
 
 fn convert_header_to_json(
@@ -40,7 +40,7 @@ fn convert_header_to_string(headers: &http::HeaderMap<http::HeaderValue>) -> Opt
 
 async fn add_shorturl(
     short_code: String,
-    item: ShortUrlMapping,
+    item: AddUrlMapping,
     store: Arc<Mutex<Store>>,
     addr: Option<SocketAddr>,
     header: http::HeaderMap,
@@ -121,7 +121,6 @@ pub fn api_token_filter(
     warp::header::header(API_TOKEN_HEADER)
         .and(warp::any().map(move || store.clone()))
         .and_then(authorize_token)
-        .and(warp::any())
         .untuple_one()
         .and(warp::any())
 }
@@ -143,6 +142,14 @@ async fn get_urls_access_log(
     // }
 
     // Ok(warp::reply::json(()))
+}
+
+async fn get_all_urls(store: Arc<Mutex<Store>>) -> Result<impl warp::Reply, warp::Rejection> {
+    Ok(warp::reply::json(&store.lock().unwrap().get_all().unwrap()))
+}
+
+async fn heart_beat() -> Result<impl warp::Reply, warp::Rejection> {
+    Ok(warp::reply::with_status("ok", http::StatusCode::OK))
 }
 
 // Custom rejection handler that maps rejections into responses.
@@ -167,6 +174,11 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, std::conve
             "METHOD_NOT_ALLOWED",
             http::StatusCode::METHOD_NOT_ALLOWED,
         ))
+    } else if let Some(_) = err.find::<warp::reject::MissingHeader>() {
+        Ok(warp::reply::with_status(
+            "MISSING_HEADER",
+            http::StatusCode::BAD_REQUEST,
+        ))
     } else {
         eprintln!("unhandled rejection: {:?}", err);
         Ok(warp::reply::with_status(
@@ -176,7 +188,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, std::conve
     }
 }
 
-fn post_json() -> impl Filter<Extract = (ShortUrlMapping,), Error = warp::Rejection> + Clone {
+fn post_json() -> impl Filter<Extract = (AddUrlMapping,), Error = warp::Rejection> + Clone {
     // When accepting a body, we want a JSON body
     // (and to reject huge payloads)...
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
@@ -204,6 +216,14 @@ async fn main() {
         .and(add_meta_filter)
         .and_then(add_shorturl);
 
+    let get_all_items = protected()
+        .and(warp::get())
+        .and(warp::path("v1"))
+        .and(warp::path("urls"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and_then(get_all_urls);
+
     let delete_item = protected()
         .and(warp::delete())
         .and(warp::path("v1"))
@@ -221,6 +241,12 @@ async fn main() {
         .and(warp::path::end())
         .and(store_filter.clone())
         .and_then(get_urls_access_log);
+
+    let test_auth = protected()
+        .and(warp::get())
+        .and(warp::path("v1"))
+        .and(warp::path::end())
+        .and_then(heart_beat);
 
     // let list_api_key = warp::get()
     //     .and(warp::path("v1"))
@@ -245,16 +271,18 @@ async fn main() {
     //     .and_then(add_shorturl);
 
     let admin_panel_route = warp::any() //protected()
-        .and(warp::path::end())
+        // .and(warp::path::end())
         .and(warp::fs::dir("www/static"));
 
     let (_api_addr, api_warp) = warp::serve(
         admin_panel_route
             //     get_access_logs
             //     delete_item
+            .or(test_auth)
             .or(get_access_logs)
             .or(add_items)
             .or(delete_item)
+            .or(get_all_items)
             .recover(handle_rejection), // .or(update_item))
     )
     .bind_ephemeral((config::LOCALHOST, config::PORT_API));
@@ -303,6 +331,17 @@ async fn main() {
     let (_web_addr, web_warp) = warp::serve(shorturl_service_route)
         .bind_ephemeral((config::LOCALHOST, config::PORT_SERVICE));
 
+    println!(
+        "> Serving public-facing redirect host @ {}:{}",
+        config::ip_to_string(config::LOCALHOST),
+        config::PORT_SERVICE
+    );
+    println!(
+        "> Serving key-protected api endpoints @ {}:{}",
+        config::ip_to_string(config::LOCALHOST),
+        config::PORT_API
+    );
+
     {
         let store = get_store.clone()();
         let mut locked_store = store.lock().unwrap();
@@ -314,7 +353,7 @@ async fn main() {
         let api_keys = locked_store.list_api_key(uid).unwrap();
 
         for api_key in api_keys {
-            println!("> api key: {}", api_key);
+            println!(">> api key: {}", api_key);
         }
     }
 

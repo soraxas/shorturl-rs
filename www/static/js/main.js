@@ -1,22 +1,21 @@
 const refreshData = async () => {
-    let data = await fetch("/api/all").then(res => res.text());
-    data = data
-        .split("\n")
-        .filter(line => line !== "")
-        .map(line => line.split(","))
-        .map(arr => ({
-            long: arr[1],
-            short: arr[0]
-        }));
+    let data = await fetch("/v1/urls", {
+        headers: {
+            "x-api-key": apikey,
+        },
+    }).then((res) => res.json());
+    data = data.map((arr) => ({
+        long: arr.url,
+        short: arr.short_code,
+    }));
 
     displayData(data);
 };
 
 const displayData = (data) => {
     const table = document.querySelector("#url-table");
-    table.innerHTML = ''; // Clear
-    data.map(TR)
-        .forEach(tr => table.appendChild(tr));
+    table.innerHTML = ""; // Clear
+    data.map(TR).forEach((tr) => table.appendChild(tr));
 };
 
 const TR = (row) => {
@@ -40,11 +39,14 @@ const deleteButton = (shortUrl) => {
 
     btn.innerHTML = "&times;";
 
-    btn.onclick = e => {
+    btn.onclick = (e) => {
         e.preventDefault();
-        fetch(`/api/${shortUrl}`, {
-            method: "DELETE"
-        }).then(_ => refreshData());
+        fetch(`/v1/url/${shortUrl}`, {
+            method: "DELETE",
+            headers: {
+                "x-api-key": apikey,
+            },
+        }).then((_) => refreshData());
     };
 
     return btn;
@@ -58,29 +60,52 @@ const TD = (s) => {
 
 const submitForm = () => {
     const form = document.forms.namedItem("new-url-form");
-    const longUrl = form.elements["longUrl"];
-    const shortUrl = form.elements["shortUrl"];
+    const longUrl = form.elements["longUrl"].value;
+    const shortUrl = form.elements["shortUrl"].value;
 
-    const url = `/api/new`;
+    const url = `/v1/url/${shortUrl}`;
 
     fetch(url, {
         method: "POST",
-        body: `${longUrl.value};${shortUrl.value}`
-    })
-    .then(_ => {
+        headers: {
+            "x-api-key": apikey,
+            "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+            url: longUrl,
+        }),
+    }).then((_) => {
         longUrl.value = "";
         shortUrl.value = "";
 
         refreshData();
     });
-
 };
 
+const params = new Proxy(new URLSearchParams(window.location.search), {
+    get: (searchParams, prop) => searchParams.get(prop),
+});
+const apikey = params.apikey;
+
 (async () => {
-    await refreshData();
-    const form = document.forms.namedItem("new-url-form");
-    form.onsubmit = e => {
-        e.preventDefault();
-        submitForm();
+    if (apikey) {
+        const test_auth = await fetch("/v1", {
+            headers: {
+                "x-api-key": apikey,
+            },
+        }).then((res) => res.text());
+
+        if (test_auth != "ok") {
+            alert("failed to authenticate!");
+            return;
+        }
+
+        await refreshData();
+        const form = document.forms.namedItem("new-url-form");
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            submitForm();
+        };
     }
 })();
