@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use std::env;
 use warp::{http, hyper::StatusCode};
 
-pub const LOCALHOST: [u8; 4] = [127, 0, 0, 1];
+pub const LOCALHOST: [u8; 4] = [0, 0, 0, 0];
 pub const PORT_SERVICE: u16 = 8080;
 pub const PORT_API: u16 = 8081;
 

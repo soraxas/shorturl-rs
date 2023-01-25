@@ -39,9 +39,10 @@ impl Store {
             CREATE TABLE IF NOT EXISTS
                 short_urls (
                     id INTEGER primary key,
-                    short_code text NOT NULL unique,
+                    short_code text NOT NULL,
                     long_url text NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    active BOOLEAN DEFAULT true
                 )
             ",
             (),
@@ -69,11 +70,11 @@ impl Store {
                 access_meta (
                     meta_type integer NOT NULL,
                     short_code text NOT NULL,
+                    short_code_id INTEGER NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     address text,
                     header text,
-                    succeed boolean,
-                    FOREIGN KEY(short_code) REFERENCES short_urls(short_code)
+                    FOREIGN KEY(short_code_id) REFERENCES short_urls(id)
                     FOREIGN KEY(meta_type) REFERENCES meta_type(id)
                 )
             ",
@@ -99,6 +100,15 @@ impl Store {
 
     pub fn insert(&mut self, short_code: &str, long_url: &str, meta: &Meta) -> Result<()> {
         let tx = self.conn.transaction()?;
+        match Store::_get(&tx, short_code, meta, false) {
+            Some(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "short code exists".to_string(),
+                ))
+            }
+            None => (),
+        };
+
         tx.execute(
             "INSERT INTO
                 short_urls (short_code, long_url)
@@ -113,17 +123,22 @@ impl Store {
     }
 
     pub fn get(&mut self, short_code: &str, meta: &Meta) -> Option<String> {
+        Store::_get(&self.conn, short_code, meta, true)
+    }
+
+    fn _get(conn: &Connection, short_code: &str, meta: &Meta, log: bool) -> Option<String> {
         let result: Option<String>;
         let mut succeed = false;
         {
-            let mut stmt = self
-                .conn
+            let mut stmt = conn
                 .prepare(
                     "SELECT
                         long_url
                     FROM
                         short_urls
                     WHERE
+                        active = true
+                    AND
                         short_code = :short_code",
                 )
                 .unwrap();
@@ -140,7 +155,9 @@ impl Store {
             };
         }
 
-        Store::accessed(&self.conn, short_code, meta, &MetaType::Access, succeed);
+        if log {
+            Store::accessed(&conn, short_code, meta, &MetaType::Access, succeed);
+        }
 
         return result;
     }
@@ -153,6 +170,8 @@ impl Store {
                     short_code, long_url
                 FROM
                     short_urls
+                WHERE
+                active = true
                     ",
             )
             .unwrap();
@@ -191,6 +210,7 @@ impl Store {
                 am.short_code
             ",
             )
+            // TODO: this query is not exactly correct when there are historical repeating non-active short-url
             .unwrap();
         let meta_list: Vec<_> = stmt
             .query_map(
@@ -217,12 +237,41 @@ impl Store {
         access_type: &MetaType,
         succeed: bool,
     ) {
+        let mut short_code_id: Option<i32> = None;
+        if succeed {
+            short_code_id = match conn.query_row(
+                "
+            SELECT
+                id
+            FROM
+                short_urls
+            WHERE
+                short_code = ?1
+            AND
+                active = true
+                ",
+                [short_code],
+                |row| row.get(0),
+            ) {
+                Ok(val) => Some(val),
+                Err(e) => {
+                    error!("{}", e);
+                    None
+                }
+            };
+        }
         match conn.execute(
             "INSERT INTO
-                access_meta (short_code, meta_type, address, header, succeed)
+                access_meta (short_code, short_code_id, meta_type, address, header)
             VALUES
                 (?1, ?2, ?3, ?4, ?5)",
-            params![short_code, access_type, meta.address, meta.header, succeed],
+            params![
+                short_code,
+                short_code_id,
+                access_type,
+                meta.address,
+                meta.header
+            ],
         ) {
             Ok(_) => (),
             Err(e) => error!("{}", e),
@@ -232,10 +281,13 @@ impl Store {
     pub fn remove(&mut self, short_code: &str) -> Result<i32> {
         self.conn
             .execute(
-                "DELETE FROM
+                "
+            UPDATE
                 short_urls
+            SET
+                active = false
             WHERE
-                short_code = (?1)",
+                short_code = ?1",
                 params![short_code],
             )
             .unwrap();

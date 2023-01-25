@@ -1,5 +1,5 @@
 const refreshData = async () => {
-    let data = await fetch("/v1/urls", {
+    let data = await fetch(`${query_url}/urls`, {
         headers: {
             "x-api-key": apikey,
         },
@@ -41,7 +41,7 @@ const deleteButton = (shortUrl) => {
 
     btn.onclick = (e) => {
         e.preventDefault();
-        fetch(`/v1/url/${shortUrl}`, {
+        fetch(`${query_url}/url/${shortUrl}`, {
             method: "DELETE",
             headers: {
                 "x-api-key": apikey,
@@ -63,7 +63,7 @@ const submitForm = () => {
     const longUrl = form.elements["longUrl"].value;
     const shortUrl = form.elements["shortUrl"].value;
 
-    const url = `/v1/url/${shortUrl}`;
+    const url = `${query_url}/url/${shortUrl}`;
 
     fetch(url, {
         method: "POST",
@@ -83,29 +83,25 @@ const submitForm = () => {
     });
 };
 
-const params = new Proxy(new URLSearchParams(window.location.search), {
-    get: (searchParams, prop) => searchParams.get(prop),
-});
-const apikey = params.apikey;
 
-(async () => {
-    if (apikey) {
-        const test_auth = await fetch("/v1", {
-            headers: {
-                "x-api-key": apikey,
-            },
-        }).then((res) => res.text());
 
-        if (test_auth != "ok") {
-            alert("failed to authenticate!");
-            return;
-        }
+async function main_initialise() {
+    if (!apikey)
+        return false;
 
-        await refreshData();
-        const form = document.forms.namedItem("new-url-form");
+    const result = await fetch(`${query_url}`, {
+        headers: {
+            "x-api-key": apikey,
+        },
+    });
+    if (result.status != 200)
+        return false;
+
+    refreshData();
+    const form = document.forms.namedItem("new-url-form");
         form.onsubmit = (e) => {
             e.preventDefault();
             submitForm();
         };
-    }
-})();
+    return true;
+}

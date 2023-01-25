@@ -27,6 +27,12 @@
             border: 3px solid red;
             padding: 10px;
         }
+
+        .middle {
+            margin: auto;
+            width: 75%;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
@@ -39,8 +45,24 @@
         Please set api key with url query parameters "apikey", i.e.,
         <br>
         <br>
-        <div id="baseurl" style="display: inline"></div>?apikey=XXXXXXXXXXXXXX
+        <div id="baseurl_info" style="display: inline"></div>?apikey=XXXXXXXXXXXXXX
     </div>
+    <div id="apikey-unauthosised" class="alertbox" style="display: none">
+        API Key is not valid.
+        <br>
+        <br>
+        Please set the correct api key.
+    </div>
+
+    <div class="middle">
+        <form id="urlParamsForm">
+            <input type="url" name="baseUrl" placeholder="Base URL (optional)" />
+            <input type="text" name="apikey" placeholder="API Key"/>
+            <button class="pure-button pure-button-primary" onclick="refreshWithParams()">Refresh</button>
+        </form>
+    </div>
+    <br>
+
     <form class="pure-form pure-form-aligned" name="new-url-form">
         <fieldset>
             <legend>Add new URL</legend>
@@ -75,10 +97,33 @@
     </table>
 </div>
 <script>
-  if (!apikey) {
-    document.getElementById("baseurl").innerHTML = window.location.origin;
-    document.getElementById("apikey-alert").style.display = "block";
-  }
+    const params = new Proxy(new URLSearchParams(window.location.search), { get:
+        (searchParams, prop) => searchParams.get(prop), });
+
+    document.getElementById("urlParamsForm").elements["baseUrl"].value = params.baseUrl;
+    document.getElementById("urlParamsForm").elements["apikey"].value = params.apikey;
+
+
+    const apikey = params.apikey;
+
+    if (!params.baseUrl)
+        params.baseUrl = "";
+
+
+    const query_url = `${params.baseUrl}/v1`;
+    if (!apikey) {
+        document.getElementById("baseurl_info").innerHTML = params.baseUrl;
+        document.getElementById("apikey-alert").style.display = "block";
+    }
+    else {
+        main_initialise().then((res) => {
+            if (!res) {
+                document.getElementById("apikey-unauthosised").style.display = "block";
+                // alert("failed to authenticate!");
+            }
+        })
+    }
+
 </script>
 </body>
 </html>
